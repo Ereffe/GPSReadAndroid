@@ -2,9 +2,15 @@ package edu.ppsm.lab03
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.widget.LinearLayout
+import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +27,29 @@ class MainActivity : AppCompatActivity(), LocationListenerCompat{
     protected var tvLat:TextView? = null
     protected var tvHgt:TextView? = null
 
+    protected var compass:CCompass? = null
+    private var accelerometer: Sensor? = null
+    private var magnetometer: Sensor? = null
+    companion object { private var sensorManager: SensorManager? = null}
+
+    private val  sensorListener: SensorEventListener = object : SensorEventListener {
+        var gValue: FloatArray? = FloatArray(3)
+        var mValue: FloatArray? = FloatArray(3)
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        override fun onSensorChanged(event: SensorEvent?) {
+            if(event!!.sensor.type == Sensor.TYPE_ACCELEROMETER) gValue = event.values.clone()
+            if(event!!.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) mValue = event.values.clone()
+            if (gValue!= null && mValue != null){
+                val R = FloatArray(9)
+                val success = SensorManager.getRotationMatrix(R,null,gValue,mValue)
+                if(success){
+                    val orientation = FloatArray(3)
+                    SensorManager.getOrientation(R,orientation)
+                    compass!!.updateData(orientation[0])
+                }
+            }
+        }
+    }
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()){
         isGranted: Boolean ->
@@ -36,11 +65,15 @@ class MainActivity : AppCompatActivity(), LocationListenerCompat{
             return
         }
         locMan!!.requestLocationUpdates(LocationManager.GPS_PROVIDER,500L,20f,this)
+        sensorManager!!.registerListener(sensorListener,accelerometer,SensorManager.SENSOR_DELAY_NORMAL,SensorManager.SENSOR_DELAY_UI)
+        sensorManager!!.registerListener(sensorListener,magnetometer,SensorManager.SENSOR_DELAY_NORMAL,SensorManager.SENSOR_DELAY_UI)
     }
 
     override fun onPause() {
         super.onPause()
         locMan!!.removeUpdates(this)
+        sensorManager!!.unregisterListener(sensorListener,accelerometer)
+        sensorManager!!.unregisterListener(sensorListener,magnetometer)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,6 +95,24 @@ class MainActivity : AppCompatActivity(), LocationListenerCompat{
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)!= PackageManager.PERMISSION_GRANTED){
             requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+
+        compass = CCompass(this)
+        val par = LinearLayout.LayoutParams(
+            RelativeLayout.LayoutParams.WRAP_CONTENT,RelativeLayout.LayoutParams.WRAP_CONTENT
+        )
+        compass!!.layoutParams = par
+        val compassTitle = TextView(this)
+        compassTitle.setText(R.string.compassText)
+        compassTitle.layoutParams = par
+        val layout = findViewById<LinearLayout>(R.id.internalLayout)
+        layout.addView(compassTitle)
+        layout.addView(compass)
+
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        accelerometer = sensorManager!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        magnetometer = sensorManager!!.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+
+
     }
 
 
