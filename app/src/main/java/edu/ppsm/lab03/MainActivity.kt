@@ -1,31 +1,49 @@
 package edu.ppsm.lab03
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.location.LocationListenerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : AppCompatActivity(), LocationListenerCompat{
     protected var locMan:LocationManager? = null
-    protected var tvLon:TextView? = null;
-    protected var tvLat:TextView? = null;
-    protected var tvHgt:TextView? = null;
+    protected var tvLon:TextView? = null
+    protected var tvLat:TextView? = null
+    protected var tvHgt:TextView? = null
 
+
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()){
+        isGranted: Boolean ->
+        if(isGranted){
+            Toast.makeText(applicationContext, R.string.permissionGranted,Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)!= PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)!= PackageManager.PERMISSION_GRANTED){
+            return
+        }
+        locMan!!.requestLocationUpdates(LocationManager.GPS_PROVIDER,500L,20f,this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        locMan!!.removeUpdates(this)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
-        locMan = getSystemService(LOCATION_SERVICE) as LocationManager
-        tvLon = findViewById(R.id.tvLon)
-        tvLat = findViewById(R.id.tvLat)
-        tvHgt = findViewById(R.id.tvHgt)
-
-
-
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
@@ -34,7 +52,18 @@ class MainActivity : AppCompatActivity(), LocationListenerCompat{
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+
+        locMan = getSystemService(LOCATION_SERVICE) as LocationManager
+        tvLon = findViewById(R.id.tvLon)
+        tvLat = findViewById(R.id.tvLat)
+        tvHgt = findViewById(R.id.tvHgt)
+
+        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)!= PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)!= PackageManager.PERMISSION_GRANTED){
+            requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
     }
+
 
     private fun formatPosition(value: Double, loc:Char):String {
         val deg = value.toInt()
@@ -46,7 +75,7 @@ class MainActivity : AppCompatActivity(), LocationListenerCompat{
     override fun onLocationChanged(location: Location) {
         var v = location.longitude
         tvLon!!.text = formatPosition(Math.abs(v), if(v>=0)'E' else 'W')
-        v = location.longitude
+        v = location.latitude
         tvLat!!.text = formatPosition(Math.abs(v), if(v>=0)'N' else 'S')
         tvHgt!!.text = " %4.1f m".format(location.altitude)
     }
